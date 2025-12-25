@@ -1,6 +1,6 @@
-# Django Activity Tracker
+# Django System Audit
 
-**An explicit, intent-aware activity & audit logging library for Django and Django REST Framework.**
+**An explicit, intent-aware audit trail library for Django and Django REST Framework.**
 
 This library helps you answer, reliably:
 
@@ -43,7 +43,7 @@ If a system claims to do these automatically, it is lying or unsafe.
 ## Installation
 
 ```bash
-pip install django-activity-tracker
+pip install django-audit-trail
 ```
 
 ---

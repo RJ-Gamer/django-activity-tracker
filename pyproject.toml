@@ -3,9 +3,9 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "django-activity-tracker"
+name = "django-system-audit"
 version = "0.1.0"
-description = "A Django pluggable app to track user activities."
+description = "Explicit, intent-aware audit trail library for Django and Django REST Framework"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
