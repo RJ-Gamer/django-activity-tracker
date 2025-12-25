@@ -2,30 +2,71 @@
 
 **An explicit, intent-aware audit trail library for Django and Django REST Framework.**
 
-This library helps you answer, reliably:
+Django System Audit helps you **reliably answer audit questions** such as:
 
 > **Who** did **what**, **when**, **where**, and **why** —
-> across **Django Admin**, **DRF APIs**, and **custom workflows**.
+> across **Django Admin**, **DRF APIs**, and **custom application workflows**.
 
-It is designed for **correctness over magic**, and for systems where **audit data must be trustworthy**.
+It is designed for **correctness over convenience**, and for systems where **audit data must be defensible**, not guessed.
+
+---
+
+## Why This Library Exists
+
+Most Django “activity” or “audit” libraries rely heavily on:
+
+* model signals
+* implicit inference
+* global hooks
+* or magical auto-tracking
+
+These approaches break down when you need:
+
+* correct actor attribution
+* intent-aware auditing (API vs Admin vs system)
+* compliance-grade audit trails
+* predictable, testable behavior
+
+**Django System Audit is intentionally explicit.**
+It prefers *intent* over *inference*, and *clarity* over *magic*.
 
 ---
 
 ## ✨ Key Features
 
-* ✅ Centralized activity logging via a single service
-* ✅ Correct **actor attribution** (user / system / anonymous)
-* ✅ Works with:
+* ✅ **Single, centralized audit service** (`track_activity`)
+* ✅ **Correct actor attribution**
+
+  * user
+  * system
+  * anonymous (explicitly allowed)
+* ✅ First-class support for:
 
   * Django Admin
   * DRF ViewSets
   * APIView / GenericAPIView
   * JWT / OAuth authentication
-* ✅ Field-level diffs (opt-in, PII-safe)
-* ✅ Request context capture (IP, user-agent, path, method)
-* ✅ Async-safe (uses `contextvars`)
-* ✅ Zero duplicate logs (automatic signal suppression)
-* ✅ Explicit > implicit (no guessing, no magic)
+* ✅ **Intent-level auditing**
+
+  * Admin & API hooks override signals
+  * Signals act only as a fallback
+* ✅ **Field-level diffs** (opt-in, PII-safe)
+* ✅ **Request context capture**
+
+  * IP address
+  * User agent
+  * HTTP method
+  * Request path
+* ✅ **Async-safe**
+
+  * Uses `contextvars`, not thread-locals
+* ✅ **No duplicate logs**
+
+  * Automatic per-request signal suppression
+* ✅ Explicit > implicit
+
+  * No guessing
+  * No silent behavior
 
 ---
 
@@ -34,17 +75,20 @@ It is designed for **correctness over magic**, and for systems where **audit dat
 * ❌ Automatically track bulk updates (`QuerySet.update`, `bulk_update`)
 * ❌ Infer intent from raw SQL or database triggers
 * ❌ Guess actors inside model signals
-* ❌ Log sensitive fields unless you explicitly allow it
+* ❌ Log sensitive fields unless explicitly allowed
+* ❌ Pretend that metadata alone constitutes an audit event
 
-If a system claims to do these automatically, it is lying or unsafe.
+If a system claims to do these safely and automatically, it is **incomplete or unsafe**.
 
 ---
 
 ## Installation
 
 ```bash
-pip install django-audit-trail
+pip install django-system-audit
 ```
+
+> ⚠️ PyPI package name and Python import path differ intentionally.
 
 ---
 
@@ -59,7 +103,14 @@ INSTALLED_APPS = [
 ]
 ```
 
-### 2️⃣ Add Middleware (Required for actor + request context)
+---
+
+### 2️⃣ Add Middleware (Required)
+
+This middleware propagates:
+
+* actor context
+* request metadata
 
 ```python
 MIDDLEWARE = [
@@ -70,7 +121,9 @@ MIDDLEWARE = [
 ]
 ```
 
-> ⚠️ Must come **after** `AuthenticationMiddleware`.
+> ⚠️ Must be **after** `AuthenticationMiddleware`.
+
+---
 
 ### 3️⃣ Run migrations
 
@@ -81,7 +134,7 @@ python manage.py migrate
 
 ---
 
-## Core Concept (Important)
+## Core Concept (Critical to Understand)
 
 **Everything funnels through one function:**
 
@@ -89,19 +142,20 @@ python manage.py migrate
 track_activity(...)
 ```
 
-All integrations (Admin, DRF, signals, helpers) eventually call this.
+All integrations—Admin, DRF, helpers, signals—eventually call this service.
 
 This guarantees:
 
 * consistent behavior
 * predictable metadata
-* easy future refactors
+* testable invariants
+* safe refactoring over time
 
 ---
 
 ## Basic Usage
 
-### Manual tracking (anywhere)
+### Manual Tracking (Anywhere)
 
 ```python
 from activity_tracker.services import track_activity
@@ -113,13 +167,21 @@ track_activity(
 )
 ```
 
+Use this for:
+
+* background jobs
+* management commands
+* custom workflows
+* system events
+
 ---
 
 ## Django Admin Integration (Recommended)
 
-Admin is an **intent boundary** — we track there explicitly.
+Admin actions represent **explicit human intent**.
+They should always be audited directly.
 
-### Enable Admin auditing
+### Enable Admin Auditing
 
 ```python
 from django.contrib import admin
@@ -132,12 +194,12 @@ class ArticleAdmin(AuditModelAdminMixin, admin.ModelAdmin):
     pass
 ```
 
-What you get:
+### What You Get
 
 * Correct actor (`request.user`)
-* Exact field diffs via `form.changed_data`
+* Exact field diffs (`form.changed_data`)
 * CREATE / UPDATE / DELETE events
-* No duplicate signal logs
+* Signal suppression (no duplicates)
 
 ---
 
@@ -155,19 +217,19 @@ class ArticleViewSet(AuditModelViewSetMixin, ModelViewSet):
     serializer_class = ArticleSerializer
 ```
 
-This provides:
+### Guarantees
 
 * Intent-level diffs (`serializer.validated_data`)
 * Explicit actor
 * Correct metadata
 * No race conditions
-* No signal duplication
+* Signals disabled automatically
 
 ---
 
 ### APIView / GenericAPIView (Explicit Helpers)
 
-For APIs without lifecycle hooks, use helpers.
+For views without lifecycle hooks:
 
 ```python
 from activity_tracker.helpers import audit_update
@@ -188,7 +250,7 @@ class ArticleUpdateAPI(UpdateAPIView):
         )
 ```
 
-Helpers available:
+Available helpers:
 
 * `audit_create`
 * `audit_update`
@@ -198,9 +260,9 @@ Helpers available:
 
 ## JWT / OAuth Authentication
 
-Stateless auth systems **do not emit Django login signals**.
+Stateless authentication **does not trigger Django login signals**.
 
-You must log intent explicitly.
+You must log these events explicitly:
 
 ```python
 from activity_tracker.drf import track_login, track_logout
@@ -209,15 +271,15 @@ track_login(request=request, user=user, auth_type="jwt")
 track_logout(request=request, user=request.user, auth_type="jwt")
 ```
 
-This is intentional and correct.
+This is **intentional and correct**.
 
 ---
 
 ## CRUD Signals (Fallback Only)
 
-Model signals exist as a **safety net**, not the primary mechanism.
+Model signals exist as a **safety net**, not a primary mechanism.
 
-### Opt-in via mixin
+### Opt-In via Mixin
 
 ```python
 from activity_tracker.model_signals import TrackModelActivityMixin
@@ -226,18 +288,20 @@ class Article(TrackModelActivityMixin, models.Model):
     title = models.CharField(max_length=255)
 ```
 
-Signals are automatically **disabled per request** when:
+### Signal Behavior
+
+Signals are **automatically disabled per request** when:
 
 * Admin mixins are used
 * DRF ViewSet mixins are used
 
-So you never get duplicates.
+This guarantees **zero duplicate audit entries**.
 
 ---
 
 ## Field-Level Diff Tracking (Advanced)
 
-Diff tracking is **opt-in** and **PII-aware**.
+Diff tracking is **explicit, opt-in, and PII-aware**.
 
 ```python
 class Article(TrackModelActivityMixin, models.Model):
@@ -248,7 +312,7 @@ class Article(TrackModelActivityMixin, models.Model):
     SENSITIVE_FIELDS = {"body"}
 ```
 
-Resulting diff example:
+Example diff:
 
 ```json
 {
@@ -261,32 +325,29 @@ Resulting diff example:
 
 ---
 
-## Metadata Model (How Data Is Stored)
+## Metadata Model
 
-Each activity record contains:
+Each audit record stores:
 
-* `actor` (user or null)
+* `actor` (user / system / null)
 * `action` (normalized string)
-* `target` (generic FK, optional)
+* `target` (GenericForeignKey, optional)
 * `metadata` (JSON)
 * `created_at`
 
-Metadata automatically includes:
+### Metadata Merge Rules
 
-* IP address
-* User agent
-* HTTP method
-* Request path
-
-Explicit metadata **always overrides** automatic metadata.
+* Request metadata is added automatically
+* Explicit metadata always **overrides**
+* No cross-request leakage
 
 ---
 
-## Philosophy (Read This)
+## Philosophy (Read This Before Using)
 
-> **Signals detect effects.
-> Views and Admin express intent.
-> Audit systems must prefer intent over inference.**
+> **Signals detect effects.**
+> **Views and Admin express intent.**
+> **Audit systems must prefer intent over inference.**
 
 This library is explicit by design:
 
@@ -299,9 +360,10 @@ This library is explicit by design:
 ## Common Pitfalls (Avoid These)
 
 * ❌ Expecting signals to capture API intent
-* ❌ Expecting bulk updates to be audited automatically
+* ❌ Expecting bulk updates to be audited
 * ❌ Logging raw PII in diffs
 * ❌ Relying on thread-locals
+* ❌ Treating metadata as an audit event
 
 ---
 
@@ -317,6 +379,12 @@ This library is explicit by design:
 
 MIT License
 
+```text
+MIT License
+
+Copyright (c) 2024 Rajat Jog
+```
+
 ---
 
 ## Final Note
@@ -328,15 +396,110 @@ This library is built for:
 * internal admin tools
 * compliance-sensitive products
 
-If you want “magic logging”, this is not it.
+If you want **magic logging**, this is not it.
 If you want **audit data you can defend**, you’re in the right place.
 
-## `LICENSE` 
-Use MIT
+## 🤝 Contributing
 
-```text
+Contributions are welcome — **but intentional design comes first**.
 
-MIT License
+This project prioritizes:
 
-Copyright (c) 2024 Rajat Jog
-```
+* correctness over convenience
+* explicit intent over implicit inference
+* predictable, testable behavior over magic
+
+Before contributing, please align with these principles.
+
+### How to Contribute
+
+1. **Open an issue first**
+
+   * Describe the problem clearly
+   * Explain *why* existing behavior is insufficient
+   * Propose a solution aligned with the project philosophy
+
+2. **Fork and create a feature branch**
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **Add or update tests**
+
+   * New behavior must be covered
+   * Bug fixes must include regression tests
+
+4. **Keep changes focused**
+
+   * One concern per PR
+   * Avoid unrelated refactors
+
+5. **Run tests before submitting**
+
+   ```bash
+   pytest
+   ```
+
+6. **Submit a pull request**
+
+   * Clearly describe intent, not just implementation
+   * Explain trade-offs if any exist
+
+---
+
+### What Will Likely Be Rejected
+
+To save everyone time, PRs are unlikely to be accepted if they:
+
+* ❌ Add implicit or “magic” behavior
+* ❌ Automatically audit bulk updates or raw SQL
+* ❌ Guess actors or intent
+* ❌ Log sensitive data without explicit opt-in
+* ❌ Break existing audit invariants
+
+This library is intentionally conservative.
+
+---
+
+## 🧭 Roadmap (High-Level)
+
+Planned or possible future work:
+
+* Audit export utilities (CSV / JSON)
+* Retention and archival helpers
+* Async offloading (Celery / Kafka)
+* Admin-side audit dashboards
+* Policy-based audit enforcement
+
+If you want to work on any of these, open an issue first.
+
+---
+
+## 📬 Maintainer & Contact
+
+Maintained by **Rajat Jog**.
+
+* GitHub: [https://github.com/](https://github.com/RJ-Gamer/)
+* Email: `rajatjog1294@gmail.com`
+* LinkedIn (optional): [https://www.linkedin.com/in/rajat-jog/](https://www.linkedin.com/in/rajat-jog/)
+
+For:
+
+* architectural questions
+* security concerns
+* compliance-related discussions
+
+please prefer **direct contact** or a **private issue** where appropriate.
+
+---
+
+## Security Disclosure
+
+If you discover a security or privacy issue:
+
+* **Do not open a public issue**
+* Contact the maintainer directly via email
+Responsible disclosure is appreciated.
+
+
